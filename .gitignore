@@ -1,0 +1,13 @@
+build/
+.dserv/
+__pycache__/
+*.pyc
+*.dll
+*.smx
+*.pdb
+*.obj
+*.exp
+*.lib
+*.exe
+*.zip
+*.log
