@@ -45,7 +45,7 @@ if __name__ == '__main__':
         binaries.extend([OUT/'projectile_lab.smx',OUT/'projectile_lab_test.smx'])
     hashes = lambda files: {str(p.relative_to(PROJECT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     manifest = {
-        'version': '0.4.0', 'server_protocol': 4, 'compatible_server': '0.4.0; RP2 stock-only fallback', 'status': 'server timeline, command replay and rocket weapon profiles; full TF2 client validation pending',
+        'version': '0.4.1', 'server_protocol': 4, 'compatible_server': '0.4.1 recommended; RP3/RP2 rocket fallback', 'status': 'server timeline, command replay and rocket weapon profiles; full TF2 client validation pending',
         'sdk_reference': 'ValveSoftware/source-sdk-2013@be57e3d01ac7d7aa6a2cacbfef187c0b46616db0',
         'sources': hashes(sorted(p for folder in ['client','server','tools','tests','config'] for p in (ROOT/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts)+sorted(ROOT.glob('README*.md'))),
         'binaries': hashes(binaries),

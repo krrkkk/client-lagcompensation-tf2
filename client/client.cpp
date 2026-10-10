@@ -296,7 +296,7 @@ static ModelPose *prepareModel(const WeaponSpec &spec) {
     Vector mins,maxs;modelInfo->GetModelRenderBounds(model,mins,maxs);
     if(!validBounds({mins.x,mins.y,mins.z},{maxs.x,maxs.y,maxs.z}))modelInfo->GetModelBounds(model,mins,maxs);
     if(validBounds({mins.x,mins.y,mins.z},{maxs.x,maxs.y,maxs.z})){rocketPose.mins={mins.x,mins.y,mins.z};rocketPose.maxs={maxs.x,maxs.y,maxs.z};}
-    if(spec.rocket())rocketPose.alignment={{{0,-1,0,0},{1,0,0,0},{0,0,1,0}}};
+    rocketPose.alignment=projectileAlignment();
     rocketPose.model=model;rocketPose.count=header->numbones;rocketPose.skins=header->numskinfamilies>0&&header->numskinfamilies<=64?header->numskinfamilies:1;
     log("projectile model prepared: item=%d bones=%d",spec.item,rocketPose.count);
     return &rocketPose;
@@ -770,7 +770,7 @@ public:
         if(call<int>(engine,104)!=440){log("not loaded: expected TF2 app 440");return false;}
         char path[MAX_PATH];const char *dir=call<const char*>(engine,35);
         if(dir&&readable(dir,1)){snprintf(path,sizeof(path),"%s/logs",dir);CreateDirectoryA(path,nullptr);snprintf(path,sizeof(path),"%s/logs/projectile_prediction.log",dir);logFile=fopen(path,"w");}
-        log("loading 0.4.0, game=%s",call<const char*>(engine,99));
+        log("loading 0.4.1, game=%s",call<const char*>(engine,99));
         if(!resolveOffsets()){log("not loaded: receive tables do not match supported TF2 layout");if(logFile){fclose(logFile);logFile=nullptr;}return false;}
         if(!resolveExplosion()){log("not loaded: TF2 explosion interface unavailable");if(logFile){fclose(logFile);logFile=nullptr;}return false;}
         if(call<void*,const char*>(cvars,10,"cl_projectile_prediction")){log("not loaded: cl_projectile_prediction already exists");if(logFile){fclose(logFile);logFile=nullptr;}return false;}
@@ -798,7 +798,7 @@ public:
     }
     void Pause() override {if(serverProtocol>=4&&allowedServer())call<void,const char*,bool>(engine,6,"rp_detach",true);paused=true;reset();}
     void UnPause() override {paused=false;helloAt=-10;}
-    const char *GetPluginDescription() override {return "projectile prediction lab 0.4.0 by avxgroup (insecure only)";}
+    const char *GetPluginDescription() override {return "projectile prediction lab 0.4.1 by avxgroup (insecure only)";}
 };
 static Plugin plugin;
 }

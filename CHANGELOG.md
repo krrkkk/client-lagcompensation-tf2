@@ -1,5 +1,11 @@
 # changes
 
+## 0.4.1
+
+- applied the same 90-degree model alignment to the remaining projectile families.
+- fixed pipes and stickies dropping at your feet: catch-up read a zero entity velocity instead of their physics velocity.
+- fixed subsequent velocity updates for bouncing and flying physics projectiles.
+
 ## 0.4.0
 
 - fixed rocket slowdown when the server cannot advance it.

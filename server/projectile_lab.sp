@@ -6,7 +6,7 @@
 #include <commandline>
 #include "weapon_profiles.inc"
 
-public Plugin myinfo = {name="projectile lab", author="avxgroup", description="opt-in projectile prediction", version="0.4.0"};
+public Plugin myinfo = {name="projectile lab", author="avxgroup", description="opt-in projectile prediction", version="0.4.1"};
 
 bool g_Enabled[MAXPLAYERS+1];
 int g_Protocol[MAXPLAYERS+1];
@@ -34,6 +34,7 @@ float g_ClockTime[MAXPLAYERS+1];
 int g_Epoch;
 int g_Acks, g_Advanced, g_Blocked, g_Rejected, g_Terminals;
 ConVar g_MaxAdvance, g_AdvanceEnabled;
+Handle g_GetVelocity;
 #include "history.inc"
 
 public void OnPluginStart()
@@ -46,6 +47,16 @@ public void OnPluginStart()
 #endif
     if (!correctPort || StrContains(padded," -insecure ")==-1)
         SetFailState("projectile lab requires port 27018 and -insecure");
+    GameData sdk=new GameData("sdktools.games");
+    if(sdk==null)SetFailState("cannot load sdktools.games for projectile velocity");
+    StartPrepSDKCall(SDKCall_Entity);
+    bool velocityReady=PrepSDKCall_SetFromConf(sdk,SDKConf_Virtual,"GetVelocity");
+    delete sdk;
+    if(!velocityReady)SetFailState("CBaseEntity::GetVelocity is missing from SDKTools gamedata");
+    PrepSDKCall_AddParameter(SDKType_Vector,SDKPass_Pointer,0,VENCODE_FLAG_COPYBACK);
+    PrepSDKCall_AddParameter(SDKType_Vector,SDKPass_Pointer,0,VENCODE_FLAG_COPYBACK);
+    g_GetVelocity=EndPrepSDKCall();
+    if(g_GetVelocity==null)SetFailState("cannot prepare native projectile velocity reader");
     g_MaxAdvance=CreateConVar("sm_rp_max_advance","0.100","maximum free-flight catch-up in seconds",FCVAR_NONE,true,0.0,true,0.150);
     g_AdvanceEnabled=CreateConVar("sm_rp_advance","1","enable bounded free-flight catch-up",FCVAR_NONE,true,0.0,true,1.0);
     RegConsoleCmd("rp_hello",Hello);
@@ -130,7 +141,7 @@ public Action Status(int client,int args)
 {
     int enabled;
     for(int i=1;i<=MaxClients;i++) if(g_Enabled[i]&&IsClientInGame(i)) enabled++;
-    ReplyToCommand(client,"RP4 version=0.4.0 epoch=%d clients=%d ack=%d advanced=%d blocked=%d rejected=%d terminal=%d explosions=%d self=%d cap=%.3f enabled=%d",g_Epoch,enabled,g_Acks,g_Advanced,g_Blocked,g_Rejected,g_Terminals,g_Explosions,g_SelfBlasts,g_MaxAdvance.FloatValue,g_AdvanceEnabled.BoolValue);
+    ReplyToCommand(client,"RP4 version=0.4.1 epoch=%d clients=%d ack=%d advanced=%d blocked=%d rejected=%d terminal=%d explosions=%d self=%d cap=%.3f enabled=%d",g_Epoch,enabled,g_Acks,g_Advanced,g_Blocked,g_Rejected,g_Terminals,g_Explosions,g_SelfBlasts,g_MaxAdvance.FloatValue,g_AdvanceEnabled.BoolValue);
     return Plugin_Handled;
 }
 
@@ -164,6 +175,14 @@ public void OnEntityCreated(int entity,const char[] classname)
     }
 }
 
+bool ProjectileVelocity(int entity,float velocity[3])
+{
+    if(g_GetVelocity==null||!IsValidEntity(entity))return false;
+    float angular[3];SDKCall(g_GetVelocity,entity,velocity,angular);
+    for(int axis=0;axis<3;axis++)if(!(velocity[axis]>=-15000.0&&velocity[axis]<=15000.0))return false;
+    return GetVectorLength(velocity)<=15000.0;
+}
+
 public void OtherSpawned(int entity) {RequestFrame(DeferredProjectile,EntIndexToEntRef(entity));}
 
 int ProjectileOwner(int entity)
@@ -182,10 +201,16 @@ public void DeferredProjectile(any reference)
     int weapon=GetEntPropEnt(entity,Prop_Send,"m_hLauncher");if(weapon<=MaxClients||!IsValidEntity(weapon)||!HasEntProp(weapon,Prop_Send,"m_iItemDefinitionIndex"))return;
     WeaponSpec spec;if(!WeaponProfile(GetEntProp(weapon,Prop_Send,"m_iItemDefinitionIndex"),spec)||spec.kind==1)return;
     int cmd=g_WeaponFireRef[weapon]==EntIndexToEntRef(weapon)?g_WeaponFireCommand[weapon]:0;if(cmd<=0)return;
-    float origin[3],velocity[3];GetEntPropVector(entity,Prop_Send,"m_vecOrigin",origin);GetEntPropVector(entity,Prop_Data,"m_vecAbsVelocity",velocity);
-    if(GetVectorLength(velocity)>15000.0)return;
+    float origin[3],velocity[3];GetEntPropVector(entity,Prop_Send,"m_vecOrigin",origin);
+    if(!ProjectileVelocity(entity,velocity))return;
+#if defined RP_TEST
+    TestVelocitySource(entity,spec.item,velocity);
+#endif
     float gravity=spec.gravity;if(GetEntityMoveType(entity)==MOVETYPE_FLYGRAVITY)gravity=GetEntityGravity(entity);
     float age=0.0;if(!IsFakeClient(owner)&&g_AdvanceEnabled.BoolValue)age=FloatMin(g_MaxAdvance.FloatValue,GetClientAvgLatency(owner,NetFlow_Outgoing)*0.5);
+#if defined RP_TEST
+    if(GetClientSerial(owner)==g_TestActorSerial)age=g_TestAdvance;
+#endif
     float advanced=AdvanceCurved(entity,owner,origin,velocity,gravity,spec.hull,age);
     if(advanced>0.0){
         if(HasEntProp(entity,Prop_Send,"m_flCreationTime")){float created=GetEntPropFloat(entity,Prop_Send,"m_flCreationTime");if(created>0.0)SetEntPropFloat(entity,Prop_Send,"m_flCreationTime",created-advanced);}
@@ -195,6 +220,7 @@ public void DeferredProjectile(any reference)
     g_Tracked.Push(reference);
 #if defined RP_TEST
     LogMessage("RP_PROJECTILE item=%d command=%d reference=%d kind=%d",spec.item,cmd,reference,spec.kind);
+    TestWatchFlight(entity,spec.item,origin,velocity);
 #endif
     char text[250];Format(text,sizeof(text),"RP4 P %d %d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d",g_Epoch,cmd,reference,spec.item,origin[0],origin[1],origin[2],velocity[0],velocity[1],velocity[2],gravity,GetGameTickCount());Message(owner,text);g_Acks++;
 }
@@ -230,7 +256,7 @@ public void OnPlayerRunCmdPost(int client,int buttons,int impulse,const float ve
     if(!WeaponProfile(item,spec)||spec.kind!=1||StrContains(classname,"tf_weapon_rocketlauncher")!=0||(g_Protocol[client]<3&&item!=18&&item!=205)) {g_Rejected++;return;}
     float origin[3],velocity[3];
     GetEntPropVector(entity,Prop_Send,"m_vecOrigin",origin);
-    GetEntPropVector(entity,Prop_Data,"m_vecAbsVelocity",velocity);
+    if(!ProjectileVelocity(entity,velocity)){g_Rejected++;return;}
 #if defined RP_TEST
     LogMessage("RP_SPAWN case=%d command=%d pos=%.3f %.3f %.3f velocity=%.3f %.3f %.3f",g_TestCase,cmdnum,origin[0],origin[1],origin[2],velocity[0],velocity[1],velocity[2]);
 #endif
@@ -258,13 +284,18 @@ public void OnPlayerRunCmdPost(int client,int buttons,int impulse,const float ve
 
 public void OnGameFrame()
 {
+#if defined RP_TEST
+    TestFlightFrame();
+#endif
     HistoryCapture();
     if(GetGameTime()<g_NextState||g_Tracked==null)return;g_NextState=GetGameTime()+0.05;
     for(int i=g_Tracked.Length-1;i>=0;i--){
         int reference=g_Tracked.Get(i),entity=EntRefToEntIndex(reference);
         if(entity<=MaxClients||!IsValidEntity(entity)||g_ProjectileRef[entity]!=reference){g_Tracked.Erase(i);continue;}
         int owner=GetClientFromSerial(g_ProjectileOwner[entity]);if(owner<1||g_Protocol[owner]<4)continue;
-        float pos[3],velocity[3],angles[3];GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos);GetEntPropVector(entity,Prop_Data,"m_vecAbsVelocity",velocity);GetEntPropVector(entity,Prop_Send,"m_angRotation",angles);
+        float pos[3],velocity[3],angles[3];GetEntPropVector(entity,Prop_Send,"m_vecOrigin",pos);
+        if(!ProjectileVelocity(entity,velocity))continue;
+        GetEntPropVector(entity,Prop_Send,"m_angRotation",angles);
         char text[250];Format(text,sizeof(text),"RP4 S %d %d %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %d",g_Epoch,g_ProjectileCommand[entity],reference,pos[0],pos[1],pos[2],velocity[0],velocity[1],velocity[2],angles[0],angles[1],angles[2],GetGameTickCount());
         Message(owner,text,false);
     }

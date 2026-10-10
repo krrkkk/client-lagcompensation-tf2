@@ -54,7 +54,7 @@ int main(int argc,char **argv) {
     assert(fabs(output[0][0][1])<.0001&&fabs(output[0][1][1])<.0001&&fabs(output[0][2][1]-1)<.0001);
     assert(fabs(output[0][0][2]-1)<.0001&&fabs(output[0][1][2])<.0001&&fabs(output[0][2][2])<.0001);
     assert(fabs(output[0][0][3]-30)<.0001&&fabs(output[0][1][3]-40)<.0001&&fabs(output[0][2][3]-50)<.0001);
-    pose.alignment={{{0,-1,0,0},{1,0,0,0},{0,0,1,0}}};
+    pose.alignment=rp::projectileAlignment();
     assert(native->SetupBones(output,1,0,0));
     rp::Matrix posed;memcpy(&posed,&output[0],sizeof(posed));
     rp::Matrix skin=rp::multiply(posed,bind);

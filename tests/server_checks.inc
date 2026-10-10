@@ -2,6 +2,34 @@
 int g_TestActorSerial, g_TestStartAcks, g_TestStartRejected, g_TestCommands, g_TestSpawn;
 int g_TestCase,g_TestFiredAt;
 int g_TestItem=18;
+float g_TestAdvance;
+int g_TestFlightRef,g_TestFlightItem;
+float g_TestFlightOrigin[3],g_TestFlightVelocity[3],g_TestFlightTime;
+void TestVelocitySource(int entity,int item,const float velocity[3])
+{
+    if(g_TestActorSerial==0)return;
+    float legacy[3];GetEntPropVector(entity,Prop_Data,"m_vecAbsVelocity",legacy);
+    LogMessage("RP_VELOCITY item=%d move=%d legacy=%.3f native=%.3f vx=%.3f vy=%.3f vz=%.3f",item,GetEntityMoveType(entity),GetVectorLength(legacy),GetVectorLength(velocity),velocity[0],velocity[1],velocity[2]);
+}
+void TestWatchFlight(int entity,int item,const float origin[3],const float velocity[3])
+{
+    if(g_TestActorSerial==0||g_TestCase!=0)return;
+    g_TestFlightRef=EntIndexToEntRef(entity);g_TestFlightItem=item;
+    g_TestFlightOrigin=origin;g_TestFlightVelocity=velocity;g_TestFlightTime=GetGameTime();
+}
+void TestFlightFrame()
+{
+    if(g_TestFlightRef==0)return;
+    float sampleAfter=GetVectorLength(g_TestFlightVelocity)>1500.0?0.06:0.20;
+    if(GetGameTime()-g_TestFlightTime<sampleAfter)return;
+    int entity=EntRefToEntIndex(g_TestFlightRef);g_TestFlightRef=0;
+    if(entity<=MaxClients||!IsValidEntity(entity))return;
+    float origin[3],velocity[3],delta[3],axis[3];GetEntPropVector(entity,Prop_Send,"m_vecOrigin",origin);
+    if(!ProjectileVelocity(entity,velocity))return;
+    SubtractVectors(origin,g_TestFlightOrigin,delta);axis=g_TestFlightVelocity;axis[2]=0.0;NormalizeVector(axis,axis);
+    LogMessage("RP_FLIGHT item=%d dt=%.3f forward=%.3f height=%.3f speed=%.3f initial=%.3f advance=%.3f",g_TestFlightItem,GetGameTime()-g_TestFlightTime,GetVectorDotProduct(delta,axis),delta[2],GetVectorLength(velocity),GetVectorLength(g_TestFlightVelocity),g_TestAdvance);
+}
+
 
 bool TestControl(int client,int &buttons,float vel[3],float angles[3],int &cmdnum,int &tickcount)
 {
@@ -44,6 +72,7 @@ public Action NativeFireCheck(int client,int args)
     g_TestStartAcks=g_Acks;g_TestStartRejected=g_Rejected;
     char mode[16];GetCmdArg(1,mode,sizeof(mode));g_TestCase=StringToInt(mode);g_TestFiredAt=0;g_TestCommands=0;
     g_TestItem=18;if(args>1){GetCmdArg(2,mode,sizeof(mode));g_TestItem=StringToInt(mode);}
+    g_TestAdvance=0.0;g_TestFlightRef=0;if(args>2){GetCmdArg(3,mode,sizeof(mode));g_TestAdvance=StringToFloat(mode);if(g_TestAdvance<0.0||g_TestAdvance>0.1)g_TestAdvance=0.0;}
     int spawn=CreateEntityByName("info_player_teamspawn");
     DispatchKeyValue(spawn,"TeamNum","2");DispatchKeyValue(spawn,"StartDisabled","0");DispatchSpawn(spawn);AcceptEntityInput(spawn,"Enable");
     float pos[3]={-14375.0,-6875.0,160.0};TeleportEntity(spawn,pos,NULL_VECTOR,NULL_VECTOR);g_TestSpawn=spawn;

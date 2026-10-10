@@ -2,7 +2,7 @@
 
 # projectile lab
 
-experimental tf2 projectile prediction. client + server 0.4.0, by avxgroup.
+experimental tf2 projectile prediction. client + server 0.4.1, by avxgroup.
 
 fire locally, let the server confirm it. clear flight can catch up by up to 100 ms.
 damage, health, hitsounds and kills stay with the server.
@@ -21,6 +21,12 @@ the dll uses `plugin_load`, no injector or automatic startup. sourcemod is only 
 - `cl_projectile_prediction` — status.
 
 close tf2 and remove `-insecure` to return to normal play.
+
+## 0.4.1 fixes
+
+- corrected the 90-degree model turn for the other projectile families.
+- fixed pipes, stickies and other physics projectiles losing their launch speed during catch-up.
+- server updates now read their actual physics velocity, including after bounces.
 
 ## included
 

@@ -15,6 +15,7 @@ struct Vec {
     Vec unit() const {float n=length();return n>0.0001f?*this*(1.f/n):Vec{};}
 };
 struct Matrix {float m[3][4];};
+inline Matrix projectileAlignment() {return {{{0,-1,0,0},{1,0,0,0},{0,0,1,0}}};}
 inline Matrix multiply(const Matrix &a,const Matrix &b) {
     Matrix result{};
     for(int r=0;r<3;r++){
